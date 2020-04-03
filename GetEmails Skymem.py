@@ -6,6 +6,10 @@ Created on Sun Mar 22 13:54:13 2020
 """
 import re, requests
 import time
+import asyncio
+from fn import _
+from fn.iters import flatten, filter
+from util import force_async, force_sync
 start_time = time.time()
 
 def getPageContent(url):   
@@ -59,8 +63,10 @@ def parseEmails(data):
         emails.add(match)
 
     return list(emails)
-    
+
+@force_async
 def getEmails(domain):
+    print('Receiving emails from %s', domain)
     res = getPageContent("http://www.skymem.info/srch?q=" + domain)
     
     # Extract emails from results page
@@ -106,16 +112,18 @@ domainsToSearch = len(domains)
 print("predicted completion in " + str(round((0.35560*domainsToSearch)/60, 2)) + " mins, aka " +
       str(round((0.35560*domainsToSearch)/(60*60), 2)) + " hours")
 
-count = 1
-for domain in domains:
-    print(str(round((count/domainsToSearch)*100,2))+"%")
-    theseEmails = getEmails(domain)
-    
-    if theseEmails:
-        allEmails.append(theseEmails)
-    else:
-        allEmails.append("")
-    count += 1
+@force_sync
+async def main():
+    domain_requests = []
+    for domain in domains:
+        domain_requests.append(getEmails(domain))
+
+    allEmails = await asyncio.gather(*domain_requests)
+    validEmails = list(filter(_ != None, flatten(allEmails)))
+
+    print(validEmails)
+
+main()
 
 print("--- %s seconds ---" % (time.time() - start_time))
 print("Average number of seconds per domain search: " + str((time.time() - start_time)/domainsToSearch))
